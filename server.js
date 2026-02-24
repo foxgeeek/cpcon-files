@@ -10,6 +10,17 @@ const sharp      = require("sharp")
 const execFileAsync = promisify(execFile)
 const GS_TIMEOUT_MS = 60_000 // 60s máximo para ghostscript
 
+function slugify(str) {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")  // remove acentos
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9._-]/g, "")
+    .replace(/_+/g, "_")
+    .substring(0, 80)
+}
+
 const app        = express()
 const PORT       = process.env.PORT || 80
 const API_KEY    = process.env.API_KEY || "change-me"
@@ -45,9 +56,20 @@ const storage = multer.diskStorage({
     try { fs.mkdirSync(dest, { recursive: true }) } catch (e) { return cb(e) }
     cb(null, dest)
   },
-  filename: (_, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase()
-    cb(null, uuidv4() + ext)
+  filename: (req, file, cb) => {
+    const ext  = path.extname(file.originalname).toLowerCase()
+    const base = path.basename(file.originalname, ext)
+    const slug = slugify(base)
+
+    const idCurso      = req.query.id_curso
+    const idDisciplina = req.query.id_disciplina
+    const idProfessor  = req.query.id_professor
+
+    const filename = (idCurso && idDisciplina && idProfessor)
+      ? `${idCurso}-${idDisciplina}-${idProfessor}-${slug}${ext}`
+      : uuidv4() + ext   // fallback sem IDs
+
+    cb(null, filename)
   },
 })
 
