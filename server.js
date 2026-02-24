@@ -228,6 +228,16 @@ app.use("/files", express.static(UPLOAD_DIR, {
   setHeaders: (res) => res.set("Cache-Control", "public, max-age=31536000"),
 }))
 
+// GET /list/:folder — lista arquivos de uma pasta (requer auth)
+app.get("/list/:folder", auth, (req, res) => {
+  const folder = req.params.folder
+  if (!ALLOWED_FOLDERS.includes(folder))
+    return res.status(400).json({ error: "Pasta inválida" })
+  const dir = path.join(UPLOAD_DIR, folder)
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir) : []
+  res.json({ folder, files })
+})
+
 // DELETE /files/:folder/:filename
 app.delete("/files/:folder/:filename", auth, (req, res) => {
   const folder   = req.params.folder
