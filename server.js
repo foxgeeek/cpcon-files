@@ -77,7 +77,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB pré-compressão
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB pré-compressão (gs pode reduzir bastante)
 })
 
 // --- Compressão de imagem com sharp ---
