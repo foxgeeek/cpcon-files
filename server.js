@@ -59,9 +59,10 @@ const storage = multer.diskStorage({
     cb(null, dest)
   },
   filename: (req, file, cb) => {
-    const ext  = path.extname(file.originalname).toLowerCase()
-    const base = path.basename(file.originalname, ext)
-    const slug = slugify(base)
+    const origExt = path.extname(file.originalname)          // extensão original (pode ser .JPG, .PDF…)
+    const ext     = origExt.toLowerCase()                    // extensão final normalizada
+    const base    = path.basename(file.originalname, origExt) // remove extensão com case original
+    const slug    = slugify(base)
 
     const idCurso      = req.query.id_curso
     const idDisciplina = req.query.id_disciplina
