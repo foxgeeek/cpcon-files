@@ -27,7 +27,9 @@ const API_KEY    = process.env.API_KEY || "change-me"
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "/uploads"
 const BASE_URL   = process.env.BASE_URL || ("http://localhost:" + PORT)
 
-const MAX_SIZE_BYTES  = 5 * 1024 * 1024 // 5MB — limite final após compressão
+const IMAGE_MAX_BYTES = 5  * 1024 * 1024 // 5MB  — limite final de imagens
+const PDF_MAX_BYTES   = 20 * 1024 * 1024 // 20MB — limite final de PDFs
+const OTHER_MAX_BYTES = 20 * 1024 * 1024 // 20MB — outros tipos
 const IMAGE_EXTS      = [".jpg", ".jpeg", ".png", ".webp", ".avif"]
 const ALLOWED_FOLDERS = ["material-apoio", "qrcodes", "questoes", "redacoes", "simulados", "videos"]
 
@@ -117,53 +119,56 @@ async function compressImage(filepath) {
   return finalSize
 }
 
-// --- Compressão de PDF com ghostscript ---
+// --- Compressão de PDF com ghostscript (passagem única) ---
 async function compressPdf(filepath) {
   const originalSize = fs.statSync(filepath).size
+  const tmp = filepath + ".tmp.pdf"
 
-  // Se já está dentro do limite, não precisa comprimir
-  if (originalSize <= MAX_SIZE_BYTES) return originalSize
-
-  const tryCompress = async (settings, outPath) => {
-    try {
-      await execFileAsync("gs", [
-        "-sDEVICE=pdfwrite",
-        "-dCompatibilityLevel=1.4",
-        "-dPDFSETTINGS=" + settings,
-        "-dNOPAUSE",
-        "-dBATCH",
-        "-sOutputFile=" + outPath,
-        filepath,
-      ], { timeout: GS_TIMEOUT_MS })
-      return fs.existsSync(outPath) ? fs.statSync(outPath).size : null
-    } catch (err) {
-      console.warn("[compress] gs falhou (" + settings + "):", err.message)
-      if (fs.existsSync(outPath)) fs.unlinkSync(outPath)
-      return null
+  try {
+    // Passagem única: reduz resolução de imagens internas para 150dpi
+    // Não usa presets (/ebook, /screen) — flags diretas são mais previsíveis e rápidas
+    await execFileAsync("gs", [
+      "-sDEVICE=pdfwrite",
+      "-dCompatibilityLevel=1.4",
+      "-dNOPAUSE",
+      "-dBATCH",
+      "-dDetectDuplicateImages=true",
+      "-dDownsampleColorImages=true",
+      "-dColorImageResolution=150",
+      "-dDownsampleGrayImages=true",
+      "-dGrayImageResolution=150",
+      "-dDownsampleMonoImages=true",
+      "-dMonoImageResolution=150",
+      "-sOutputFile=" + tmp,
+      filepath,
+    ], { timeout: GS_TIMEOUT_MS })
+  } catch (err) {
+    console.warn("[compress] gs falhou:", err.message)
+    if (fs.existsSync(tmp)) fs.unlinkSync(tmp)
+    // gs falhou — valida só o tamanho original
+    if (originalSize > PDF_MAX_BYTES) {
+      fs.unlinkSync(filepath)
+      throw new Error("PDF muito grande (" + (originalSize / 1024 / 1024).toFixed(1) + "MB). Máximo: 20MB")
     }
+    return originalSize
   }
 
-  // Tentativa 1: /ebook
-  const tmp1 = filepath + ".tmp.pdf"
-  const size1 = await tryCompress("/ebook", tmp1)
-  if (size1 !== null && size1 <= MAX_SIZE_BYTES) {
-    fs.renameSync(tmp1, filepath)
-    return size1
-  }
-  if (fs.existsSync(tmp1)) fs.unlinkSync(tmp1)
+  const compressedSize = fs.existsSync(tmp) ? fs.statSync(tmp).size : originalSize
 
-  // Tentativa 2: /screen (máxima compressão)
-  const tmp2 = filepath + ".tmp2.pdf"
-  const size2 = await tryCompress("/screen", tmp2)
-  if (size2 !== null && size2 <= MAX_SIZE_BYTES) {
-    fs.renameSync(tmp2, filepath)
-    return size2
+  // Usa o comprimido se for menor; descarta se ficar maior (raro)
+  if (compressedSize < originalSize) {
+    fs.renameSync(tmp, filepath)
+  } else {
+    fs.unlinkSync(tmp)
   }
-  if (fs.existsSync(tmp2)) fs.unlinkSync(tmp2)
 
-  // Ghostscript não conseguiu comprimir abaixo do limite
-  fs.unlinkSync(filepath)
-  throw new Error("PDF não pôde ser comprimido abaixo de 5MB")
+  const finalSize = fs.statSync(filepath).size
+  if (finalSize > PDF_MAX_BYTES) {
+    fs.unlinkSync(filepath)
+    throw new Error("PDF muito grande (" + (finalSize / 1024 / 1024).toFixed(1) + "MB). Máximo: 20MB")
+  }
+
+  return finalSize
 }
 
 // --- Dispatcher de compressão ---
@@ -183,10 +188,10 @@ async function compress(filepath) {
     return final
   }
 
-  // Outros tipos: só valida o limite
-  if (size > MAX_SIZE_BYTES) {
+  // Outros tipos: valida limite
+  if (size > OTHER_MAX_BYTES) {
     fs.unlinkSync(filepath)
-    throw new Error("Arquivo muito grande (" + (size / 1024 / 1024).toFixed(1) + "MB). Máximo: 5MB")
+    throw new Error("Arquivo muito grande (" + (size / 1024 / 1024).toFixed(1) + "MB). Máximo: 20MB")
   }
 
   return size
