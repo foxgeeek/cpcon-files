@@ -1,0 +1,18 @@
+node_modules/
+.env
+
+# Ignora arquivos dentro de uploads mas mantém a estrutura de pastas
+uploads/**
+!uploads/
+!uploads/material-apoio/
+!uploads/material-apoio/.gitkeep
+!uploads/qrcodes/
+!uploads/qrcodes/.gitkeep
+!uploads/questoes/
+!uploads/questoes/.gitkeep
+!uploads/redacoes/
+!uploads/redacoes/.gitkeep
+!uploads/simulados/
+!uploads/simulados/.gitkeep
+!uploads/videos/
+!uploads/videos/.gitkeep
