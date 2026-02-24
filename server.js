@@ -119,50 +119,51 @@ async function compressImage(filepath) {
 
 // --- Compressão de PDF com ghostscript ---
 async function compressPdf(filepath) {
-  const tmp = filepath + ".tmp.pdf"
+  const originalSize = fs.statSync(filepath).size
 
-  await execFileAsync("gs", [
-    "-sDEVICE=pdfwrite",
-    "-dCompatibilityLevel=1.4",
-    "-dPDFSETTINGS=/ebook",   // boa compressão, boa qualidade
-    "-dNOPAUSE",
-    "-dQUIET",
-    "-dBATCH",
-    "-sOutputFile=" + tmp,
-    filepath,
-  ], { timeout: GS_TIMEOUT_MS })
+  // Se já está dentro do limite, não precisa comprimir
+  if (originalSize <= MAX_SIZE_BYTES) return originalSize
 
-  const newSize = fs.statSync(tmp).size
-
-  if (newSize > MAX_SIZE_BYTES) {
-    // Tenta compressão máxima
-    const tmp2 = filepath + ".tmp2.pdf"
-    await execFileAsync("gs", [
-      "-sDEVICE=pdfwrite",
-      "-dCompatibilityLevel=1.4",
-      "-dPDFSETTINGS=/screen", // compressão máxima
-      "-dNOPAUSE",
-      "-dQUIET",
-      "-dBATCH",
-      "-sOutputFile=" + tmp2,
-      filepath,
-    ], { timeout: GS_TIMEOUT_MS })
-
-    const size2 = fs.statSync(tmp2).size
-    if (fs.existsSync(tmp)) fs.unlinkSync(tmp)
-
-    if (size2 > MAX_SIZE_BYTES) {
-      if (fs.existsSync(tmp2)) fs.unlinkSync(tmp2)
-      fs.unlinkSync(filepath)
-      throw new Error("PDF não pôde ser comprimido abaixo de 5MB")
+  const tryCompress = async (settings, outPath) => {
+    try {
+      await execFileAsync("gs", [
+        "-sDEVICE=pdfwrite",
+        "-dCompatibilityLevel=1.4",
+        "-dPDFSETTINGS=" + settings,
+        "-dNOPAUSE",
+        "-dBATCH",
+        "-sOutputFile=" + outPath,
+        filepath,
+      ], { timeout: GS_TIMEOUT_MS })
+      return fs.existsSync(outPath) ? fs.statSync(outPath).size : null
+    } catch (err) {
+      console.warn("[compress] gs falhou (" + settings + "):", err.message)
+      if (fs.existsSync(outPath)) fs.unlinkSync(outPath)
+      return null
     }
+  }
 
+  // Tentativa 1: /ebook
+  const tmp1 = filepath + ".tmp.pdf"
+  const size1 = await tryCompress("/ebook", tmp1)
+  if (size1 !== null && size1 <= MAX_SIZE_BYTES) {
+    fs.renameSync(tmp1, filepath)
+    return size1
+  }
+  if (fs.existsSync(tmp1)) fs.unlinkSync(tmp1)
+
+  // Tentativa 2: /screen (máxima compressão)
+  const tmp2 = filepath + ".tmp2.pdf"
+  const size2 = await tryCompress("/screen", tmp2)
+  if (size2 !== null && size2 <= MAX_SIZE_BYTES) {
     fs.renameSync(tmp2, filepath)
     return size2
   }
+  if (fs.existsSync(tmp2)) fs.unlinkSync(tmp2)
 
-  fs.renameSync(tmp, filepath)
-  return newSize
+  // Ghostscript não conseguiu comprimir abaixo do limite
+  fs.unlinkSync(filepath)
+  throw new Error("PDF não pôde ser comprimido abaixo de 5MB")
 }
 
 // --- Dispatcher de compressão ---
