@@ -5,7 +5,7 @@ const fs = require("fs")
 const { v4: uuidv4 } = require("uuid")
 
 const app = express()
-const PORT = process.env.PORT || 4000
+const PORT = process.env.PORT || 80
 const API_KEY = process.env.API_KEY || "change-me"
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "/uploads"
 const BASE_URL = process.env.BASE_URL || ("http://localhost:" + PORT)

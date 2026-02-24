@@ -10,6 +10,6 @@ COPY server.js ./
 # Volume onde os arquivos ficam persistidos
 VOLUME ["/uploads"]
 
-EXPOSE 4000
+EXPOSE 80
 
 CMD ["node", "server.js"]
