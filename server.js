@@ -8,7 +8,7 @@ const { v4: uuidv4 } = require("uuid")
 const sharp      = require("sharp")
 
 const execFileAsync = promisify(execFile)
-const GS_TIMEOUT_MS = 60_000 // 60s máximo para ghostscript
+const GS_TIMEOUT_MS = 300_000 // 5min máximo para ghostscript (PDFs grandes)
 
 function slugify(str) {
   return str
