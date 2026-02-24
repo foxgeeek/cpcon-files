@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require("uuid")
 const sharp      = require("sharp")
 
 const execFileAsync = promisify(execFile)
+const GS_TIMEOUT_MS = 60_000 // 60s máximo para ghostscript
 
 const app        = express()
 const PORT       = process.env.PORT || 80
@@ -107,7 +108,7 @@ async function compressPdf(filepath) {
     "-dBATCH",
     "-sOutputFile=" + tmp,
     filepath,
-  ])
+  ], { timeout: GS_TIMEOUT_MS })
 
   const newSize = fs.statSync(tmp).size
 
@@ -123,7 +124,7 @@ async function compressPdf(filepath) {
       "-dBATCH",
       "-sOutputFile=" + tmp2,
       filepath,
-    ])
+    ], { timeout: GS_TIMEOUT_MS })
 
     const size2 = fs.statSync(tmp2).size
     if (fs.existsSync(tmp)) fs.unlinkSync(tmp)
