@@ -81,42 +81,55 @@ const upload = multer({
 })
 
 // --- Compressão de imagem com sharp ---
+// Sempre comprime. Se ficar abaixo de IMAGE_MAX_BYTES numa das passagens, para cedo.
+// Caso contrário, usa a menor versão obtida e aceita assim mesmo.
 async function compressImage(filepath) {
   const ext    = path.extname(filepath).toLowerCase()
   const format = ext === ".png" ? "png" : "jpeg"
   const tmp    = filepath + ".tmp"
 
-  // Sempre comprime imagens (qualidade boa por padrão, reduz se necessário)
-  const qualities = [80, 65, 50, 40]
+  const passes = [
+    { width: 1920, quality: 80 },
+    { width: 1920, quality: 65 },
+    { width: 1920, quality: 50 },
+    { width: 1200, quality: 40 },
+    { width: 800,  quality: 35 },
+  ]
 
-  for (const quality of qualities) {
+  let bestSize = Infinity
+  let bestTmp  = null
+
+  for (const { width, quality } of passes) {
+    const out = filepath + `.q${quality}.tmp`
     await sharp(filepath)
-      .resize({ width: 1920, withoutEnlargement: true })
+      .resize({ width, withoutEnlargement: true })
       .toFormat(format, { quality })
-      .toFile(tmp)
+      .toFile(out)
 
-    const size = fs.statSync(tmp).size
-    if (size <= MAX_SIZE_BYTES) {
-      fs.renameSync(tmp, filepath)
-      return size
+    const size = fs.statSync(out).size
+
+    // Guarda a menor versão obtida até agora
+    if (size < bestSize) {
+      if (bestTmp && fs.existsSync(bestTmp)) fs.unlinkSync(bestTmp)
+      bestSize = size
+      bestTmp  = out
+    } else {
+      fs.unlinkSync(out)
     }
+
+    // Para cedo se já está dentro do limite ideal
+    if (size <= IMAGE_MAX_BYTES) break
   }
 
-  // Última tentativa: reduz resolução
-  await sharp(filepath)
-    .resize({ width: 1200, withoutEnlargement: true })
-    .toFormat(format, { quality: 35 })
-    .toFile(tmp)
-
-  const finalSize = fs.statSync(tmp).size
-  if (finalSize > MAX_SIZE_BYTES) {
-    if (fs.existsSync(tmp)) fs.unlinkSync(tmp)
-    fs.unlinkSync(filepath)
-    throw new Error("Imagem não pôde ser comprimida abaixo de 5MB")
+  // Usa a melhor versão comprimida (mesmo que fique acima do limite)
+  if (bestTmp) {
+    fs.renameSync(bestTmp, filepath)
   }
 
-  fs.renameSync(tmp, filepath)
-  return finalSize
+  // Limpa qualquer tmp restante
+  if (fs.existsSync(tmp)) fs.unlinkSync(tmp)
+
+  return fs.statSync(filepath).size
 }
 
 // --- Compressão de PDF com ghostscript (passagem única) ---
