@@ -163,14 +163,9 @@ async function compressPdf(filepath) {
       filepath,
     ], { timeout: GS_TIMEOUT_MS })
   } catch (err) {
-    console.warn("[compress] gs falhou:", err.message)
+    console.warn("[compress] gs falhou, usando arquivo original:", err.message)
     if (fs.existsSync(tmp)) fs.unlinkSync(tmp)
-    // gs falhou — valida só o tamanho original
-    if (originalSize > PDF_MAX_BYTES) {
-      fs.unlinkSync(filepath)
-      throw new Error("PDF muito grande (" + (originalSize / 1024 / 1024).toFixed(1) + "MB). Máximo: 20MB")
-    }
-    return originalSize
+    return originalSize  // fallback: sobe o original sem comprimir
   }
 
   const compressedSize = fs.existsSync(tmp) ? fs.statSync(tmp).size : originalSize
