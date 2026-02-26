@@ -320,6 +320,45 @@ app.delete("/files/*", auth, (req, res) => {
   }
 })
 
+// POST /move?from=folder/sub/file&to=folder2/sub2/file — move (rename) arquivo ou pasta
+app.post("/move", auth, (req, res) => {
+  const from = req.query.from
+  const to   = req.query.to
+
+  if (!from || !to)
+    return res.status(400).json({ error: "from e to são obrigatórios" })
+
+  const fromParts = String(from).split("/").filter(Boolean)
+  const toParts   = String(to).split("/").filter(Boolean)
+
+  if (fromParts.length < 2 || toParts.length < 2)
+    return res.status(400).json({ error: "Caminho inválido. Use: pasta/arquivo" })
+
+  if (!ALLOWED_FOLDERS.includes(fromParts[0]) || !ALLOWED_FOLDERS.includes(toParts[0]))
+    return res.status(400).json({ error: "Pasta inválida" })
+
+  const safeSrcParts = fromParts.map(p => path.basename(p))
+  const safeDstParts = toParts.map(p => path.basename(p))
+
+  const srcPath = path.join(UPLOAD_DIR, ...safeSrcParts)
+  const dstPath = path.join(UPLOAD_DIR, ...safeDstParts)
+
+  if (!fs.existsSync(srcPath))
+    return res.status(404).json({ error: "Arquivo não encontrado" })
+
+  if (fs.existsSync(dstPath))
+    return res.status(409).json({ error: "Já existe um arquivo com esse nome no destino" })
+
+  try {
+    fs.mkdirSync(path.dirname(dstPath), { recursive: true })
+    fs.renameSync(srcPath, dstPath)
+    console.log("[move] OK:", from, "→", to)
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /mkdir?folder=X&subfolder=Y&name=Z  — cria subpasta
 app.post("/mkdir", auth, (req, res) => {
   const folder    = req.query.folder
