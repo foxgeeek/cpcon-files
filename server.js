@@ -10,6 +10,13 @@ const sharp      = require("sharp")
 const execFileAsync = promisify(execFile)
 const GS_TIMEOUT_MS = 300_000 // 5min máximo para ghostscript (PDFs grandes)
 
+// Sanitiza um path relativo de subfolder contra path traversal
+function safeSub(p) {
+  if (!p) return null
+  const parts = String(p).split("/").map(s => path.basename(s)).filter(s => s && s !== ".")
+  return parts.length ? parts.join("/") : null
+}
+
 function slugify(str) {
   return str
     .toLowerCase()
@@ -54,7 +61,7 @@ const storage = multer.diskStorage({
     const folder = req.query.folder
     if (!folder || !ALLOWED_FOLDERS.includes(folder))
       return cb(new Error("Pasta inválida. Use: " + ALLOWED_FOLDERS.join(", ")))
-    const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
+    const subfolder = safeSub(req.query.subfolder)
     const dest = subfolder
       ? path.join(UPLOAD_DIR, folder, subfolder)
       : path.join(UPLOAD_DIR, folder)
@@ -224,7 +231,7 @@ app.post("/upload", auth, (req, res) => {
     try {
       const finalSize = await compress(req.file.path)
       const folder    = req.query.folder
-      const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
+      const subfolder = safeSub(req.query.subfolder)
       const url       = subfolder
         ? BASE_URL + "/files/" + folder + "/" + subfolder + "/" + req.file.filename
         : BASE_URL + "/files/" + folder + "/" + req.file.filename
@@ -257,14 +264,14 @@ app.get("/list/:folder", auth, (req, res) => {
   if (!ALLOWED_FOLDERS.includes(folder))
     return res.status(400).json({ error: "Pasta inválida" })
 
-  const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
+  const subfolder = safeSub(req.query.subfolder)
   const dir = subfolder
     ? path.join(UPLOAD_DIR, folder, subfolder)
     : path.join(UPLOAD_DIR, folder)
 
   if (!fs.existsSync(dir)) return res.json({ folder, subfolder: subfolder || null, entries: [] })
 
-  const raw = fs.readdirSync(dir, { withFileTypes: true })
+  const raw = fs.readdirSync(dir, { withFileTypes: true }).filter(e => !e.name.startsWith("."))
   const entries = raw.map(e => {
     const stat = fs.statSync(path.join(dir, e.name))
     return {
@@ -316,7 +323,7 @@ app.delete("/files/*", auth, (req, res) => {
 // POST /mkdir?folder=X&subfolder=Y&name=Z  — cria subpasta
 app.post("/mkdir", auth, (req, res) => {
   const folder    = req.query.folder
-  const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
+  const subfolder = safeSub(req.query.subfolder)
   const name      = req.query.name ? path.basename(req.query.name) : null
 
   if (!folder || !ALLOWED_FOLDERS.includes(folder))
