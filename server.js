@@ -305,9 +305,9 @@ app.get("/health", (_, res) => {
       subpastasEntries.forEach(sub => {
         const subDir = path.join(dir, sub.name)
         const subEntries = fs.readdirSync(subDir, { withFileTypes: true })
-        const subArquivos = subEntries.filter(e => e.isFile()).length
-        subpastas[sub.name] = { arquivos: subArquivos }
-        totalSubpastas += subArquivos
+        const files = subEntries.filter(e => e.isFile()).map(e => e.name)
+        subpastas[sub.name] = { total: files.length, arquivos: files }
+        totalSubpastas += files.length
       })
 
       const total = arquivosDiretos + totalSubpastas
