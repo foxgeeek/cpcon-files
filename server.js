@@ -316,7 +316,7 @@ app.get("/health", (_, res) => {
       folders[f] = {
         total,
         ...(arquivosDiretos > 0 && { direto: arquivosDiretos }),
-        ...(subpastasEntries.length > 0 && { subpastas }),
+        ...subpastas,
       }
     })
 
