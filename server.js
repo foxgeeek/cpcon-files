@@ -256,26 +256,57 @@ app.use("/files", express.static(UPLOAD_DIR, {
   setHeaders: (res) => res.set("Cache-Control", "public, max-age=31536000"),
 }))
 
-// GET /list/:folder — lista arquivos de uma pasta (requer auth)
+// GET /list/:folder?subfolder= — lista arquivos/subpastas com metadados (requer auth)
 app.get("/list/:folder", auth, (req, res) => {
   const folder = req.params.folder
   if (!ALLOWED_FOLDERS.includes(folder))
     return res.status(400).json({ error: "Pasta inválida" })
-  const dir = path.join(UPLOAD_DIR, folder)
-  const files = fs.existsSync(dir) ? fs.readdirSync(dir) : []
-  res.json({ folder, files })
+
+  const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
+  const dir = subfolder
+    ? path.join(UPLOAD_DIR, folder, subfolder)
+    : path.join(UPLOAD_DIR, folder)
+
+  if (!fs.existsSync(dir)) return res.json({ folder, subfolder: subfolder || null, entries: [] })
+
+  const raw = fs.readdirSync(dir, { withFileTypes: true })
+  const entries = raw.map(e => {
+    const stat = fs.statSync(path.join(dir, e.name))
+    return {
+      name:     e.name,
+      isDir:    e.isDirectory(),
+      size:     e.isFile() ? stat.size : null,
+      modified: stat.mtime.toISOString(),
+    }
+  }).sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+
+  res.json({ folder, subfolder: subfolder || null, entries })
 })
 
-// DELETE /files/:folder/:filename
-app.delete("/files/:folder/:filename", auth, (req, res) => {
-  const folder   = req.params.folder
-  const filename = path.basename(req.params.filename)
+// DELETE /files/* — suporta qualquer profundidade (folder/file ou folder/subfolder/file)
+app.delete("/files/*", auth, (req, res) => {
+  const filePath = req.params[0]
+  const parts    = filePath.split("/").filter(Boolean)
 
+  if (parts.length < 2)
+    return res.status(400).json({ error: "Caminho inválido. Use: pasta/arquivo ou pasta/subpasta/arquivo" })
+
+  const folder = parts[0]
   if (!ALLOWED_FOLDERS.includes(folder))
     return res.status(400).json({ error: "Pasta inválida" })
 
-  const filepath = path.join(UPLOAD_DIR, folder, filename)
-  if (!fs.existsSync(filepath)) return res.status(404).json({ error: "Arquivo não encontrado" })
+  // Sanitiza cada segmento contra path traversal
+  const safeParts = parts.map(p => path.basename(p))
+  const filepath  = path.join(UPLOAD_DIR, ...safeParts)
+
+  if (!fs.existsSync(filepath))
+    return res.status(404).json({ error: "Arquivo não encontrado" })
+
+  if (fs.statSync(filepath).isDirectory())
+    return res.status(400).json({ error: "Não é possível deletar pastas diretamente" })
 
   try {
     fs.unlinkSync(filepath)
