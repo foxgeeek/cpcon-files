@@ -50,18 +50,11 @@ function auth(req, res, next) {
 
 // Multer — aceita até 50MB antes de comprimir
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (req, _, cb) => {
     const folder = req.query.folder
     if (!folder || !ALLOWED_FOLDERS.includes(folder))
       return cb(new Error("Pasta inválida. Use: " + ALLOWED_FOLDERS.join(", ")))
-
-    // Subfolder pode vir embutido no originalname (ex: "simulado_218/aluno435.pdf")
-    // ou via query param legado
-    const origDir   = path.dirname(file.originalname)
-    const subfolder = (origDir && origDir !== ".")
-      ? origDir
-      : (req.query.subfolder ? path.basename(req.query.subfolder) : null)
-
+    const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
     const dest = subfolder
       ? path.join(UPLOAD_DIR, folder, subfolder)
       : path.join(UPLOAD_DIR, folder)
@@ -69,23 +62,20 @@ const storage = multer.diskStorage({
     cb(null, dest)
   },
   filename: (req, file, cb) => {
-    const basename = path.basename(file.originalname)         // remove qualquer prefixo de pasta
-    const origExt  = path.extname(basename)                   // extensão original (pode ser .JPG, .PDF…)
-    const ext      = origExt.toLowerCase()                    // extensão final normalizada
-    const base     = path.basename(basename, origExt)         // sem extensão
-    const slug     = slugify(base)
-
-    const origDir      = path.dirname(file.originalname)
-    const hasPath      = origDir && origDir !== "."
+    const origExt = path.extname(file.originalname)          // extensão original (pode ser .JPG, .PDF…)
+    const ext     = origExt.toLowerCase()                    // extensão final normalizada
+    const base    = path.basename(file.originalname, origExt) // remove extensão com case original
+    const slug    = slugify(base)
 
     const idCurso      = req.query.id_curso
     const idDisciplina = req.query.id_disciplina
     const idProfessor  = req.query.id_professor
+    const subfolder    = req.query.subfolder
 
     const filename = (idCurso && idDisciplina && idProfessor)
       ? `${idCurso}-${idDisciplina}-${idProfessor}-${slug}${ext}`
-      : (hasPath || req.query.subfolder)
-        ? `${slug}${ext}`   // usa basename do originalname quando tem estrutura de pasta
+      : subfolder
+        ? `${slug}${ext}`   // usa o originalname quando vai pra subpasta
         : uuidv4() + ext    // fallback UUID
 
     cb(null, filename)
@@ -239,10 +229,7 @@ app.post("/upload", auth, (req, res) => {
     try {
       const finalSize = await compress(req.file.path)
       const folder    = req.query.folder
-      const origDir   = path.dirname(req.file.originalname)
-      const subfolder = (origDir && origDir !== ".")
-        ? origDir
-        : (req.query.subfolder ? path.basename(req.query.subfolder) : null)
+      const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
       const url       = subfolder
         ? BASE_URL + "/files/" + folder + "/" + subfolder + "/" + req.file.filename
         : BASE_URL + "/files/" + folder + "/" + req.file.filename
