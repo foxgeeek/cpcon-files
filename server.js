@@ -318,6 +318,32 @@ app.delete("/files/*", auth, (req, res) => {
   }
 })
 
+// POST /mkdir?folder=X&subfolder=Y&name=Z  — cria subpasta
+app.post("/mkdir", auth, (req, res) => {
+  const folder    = req.query.folder
+  const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
+  const name      = req.query.name ? path.basename(req.query.name) : null
+
+  if (!folder || !ALLOWED_FOLDERS.includes(folder))
+    return res.status(400).json({ error: "Pasta inválida. Use: " + ALLOWED_FOLDERS.join(", ") })
+
+  if (!name)
+    return res.status(400).json({ error: "name é obrigatório" })
+
+  const dirPath = subfolder
+    ? path.join(UPLOAD_DIR, folder, subfolder, name)
+    : path.join(UPLOAD_DIR, folder, name)
+
+  try {
+    fs.mkdirSync(dirPath, { recursive: true })
+    console.log("[mkdir] OK:", dirPath)
+    res.json({ success: true })
+  } catch (err) {
+    console.error("[mkdir] error:", err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET /health
 app.get("/health", (_, res) => {
   try {
