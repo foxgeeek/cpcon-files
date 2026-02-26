@@ -305,11 +305,13 @@ app.delete("/files/*", auth, (req, res) => {
   if (!fs.existsSync(filepath))
     return res.status(404).json({ error: "Arquivo não encontrado" })
 
-  if (fs.statSync(filepath).isDirectory())
-    return res.status(400).json({ error: "Não é possível deletar pastas diretamente" })
-
   try {
-    fs.unlinkSync(filepath)
+    const stat = fs.statSync(filepath)
+    if (stat.isDirectory()) {
+      fs.rmSync(filepath, { recursive: true, force: true })
+    } else {
+      fs.unlinkSync(filepath)
+    }
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
