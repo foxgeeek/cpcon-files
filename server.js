@@ -31,7 +31,7 @@ const IMAGE_MAX_BYTES = 5  * 1024 * 1024 // 5MB  — limite final de imagens
 const PDF_MAX_BYTES   = 20 * 1024 * 1024 // 20MB — limite final de PDFs
 const OTHER_MAX_BYTES = 20 * 1024 * 1024 // 20MB — outros tipos
 const IMAGE_EXTS      = [".jpg", ".jpeg", ".png", ".webp", ".avif"]
-const ALLOWED_FOLDERS = ["material-apoio", "qrcodes", "questoes", "redacoes", "simulados", "videos"]
+const ALLOWED_FOLDERS = ["imagens", "material-apoio", "qrcodes", "questoes", "redacoes", "simulados", "videos"]
 
 // Garante diretórios no boot
 try {
