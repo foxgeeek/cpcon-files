@@ -54,7 +54,10 @@ const storage = multer.diskStorage({
     const folder = req.query.folder
     if (!folder || !ALLOWED_FOLDERS.includes(folder))
       return cb(new Error("Pasta inválida. Use: " + ALLOWED_FOLDERS.join(", ")))
-    const dest = path.join(UPLOAD_DIR, folder)
+    const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
+    const dest = subfolder
+      ? path.join(UPLOAD_DIR, folder, subfolder)
+      : path.join(UPLOAD_DIR, folder)
     try { fs.mkdirSync(dest, { recursive: true }) } catch (e) { return cb(e) }
     cb(null, dest)
   },
@@ -223,7 +226,10 @@ app.post("/upload", auth, (req, res) => {
     try {
       const finalSize = await compress(req.file.path)
       const folder    = req.query.folder
-      const url       = BASE_URL + "/files/" + folder + "/" + req.file.filename
+      const subfolder = req.query.subfolder ? path.basename(req.query.subfolder) : null
+      const url       = subfolder
+        ? BASE_URL + "/files/" + folder + "/" + subfolder + "/" + req.file.filename
+        : BASE_URL + "/files/" + folder + "/" + req.file.filename
 
       console.log("[upload] OK:", folder + "/" + req.file.filename, "(" + (finalSize / 1024).toFixed(0) + "KB)")
 
@@ -279,12 +285,42 @@ app.delete("/files/:folder/:filename", auth, (req, res) => {
 // GET /health
 app.get("/health", (_, res) => {
   try {
-    const counts = {}
+    const folders = {}
+    let totalGeral = 0
+
     ALLOWED_FOLDERS.forEach((f) => {
       const dir = path.join(UPLOAD_DIR, f)
-      counts[f] = fs.existsSync(dir) ? fs.readdirSync(dir).length : "pasta não encontrada"
+      if (!fs.existsSync(dir)) {
+        folders[f] = { erro: "pasta não encontrada" }
+        return
+      }
+
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      const arquivosDiretos = entries.filter(e => e.isFile()).length
+      const subpastasEntries = entries.filter(e => e.isDirectory())
+
+      const subpastas = {}
+      let totalSubpastas = 0
+
+      subpastasEntries.forEach(sub => {
+        const subDir = path.join(dir, sub.name)
+        const subEntries = fs.readdirSync(subDir, { withFileTypes: true })
+        const subArquivos = subEntries.filter(e => e.isFile()).length
+        subpastas[sub.name] = { arquivos: subArquivos }
+        totalSubpastas += subArquivos
+      })
+
+      const total = arquivosDiretos + totalSubpastas
+      totalGeral += total
+
+      folders[f] = {
+        total,
+        ...(arquivosDiretos > 0 && { direto: arquivosDiretos }),
+        ...(subpastasEntries.length > 0 && { subpastas }),
+      }
     })
-    res.json({ status: "ok", folders: counts })
+
+    res.json({ status: "ok", total_arquivos: totalGeral, folders })
   } catch (err) {
     res.status(500).json({ status: "error", error: err.message })
   }
