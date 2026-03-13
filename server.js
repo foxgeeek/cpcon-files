@@ -543,5 +543,5 @@ app.listen(PORT, () => {
   console.log("cpcon-files rodando em :" + PORT)
   console.log("Arquivos em:", UPLOAD_DIR)
   console.log("URL base:", BASE_URL)
-  console.log("Limite final por arquivo: 5MB")
+  console.log("Limite upload: 5GB (multer) | Imagens: 5MB | PDFs: 20MB | Outros: 20MB")
 })
