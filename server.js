@@ -2,6 +2,7 @@ const express    = require("express")
 const multer     = require("multer")
 const path       = require("path")
 const fs         = require("fs")
+const AdmZip     = require("adm-zip")
 const { execFile } = require("child_process")
 const { promisify } = require("util")
 const { v4: uuidv4 } = require("uuid")
@@ -285,6 +286,74 @@ app.post("/upload-raw", auth, (req, res) => {
       size:         finalSize,
       mimetype:     req.file.mimetype,
     })
+  })
+})
+
+// POST /extract-zip?folder=X&subfolder=Y&filename=Z — extrai zip que já está no disco
+app.post("/extract-zip", auth, express.json(), (req, res) => {
+  const folder    = req.query.folder || req.body.folder
+  const subfolder = safeSub(req.query.subfolder || req.body.subfolder)
+  const filename  = req.query.filename || req.body.filename
+
+  if (!folder || !ALLOWED_FOLDERS.includes(folder))
+    return res.status(400).json({ error: "Pasta inválida" })
+  if (!filename || !filename.toLowerCase().endsWith(".zip"))
+    return res.status(400).json({ error: "filename deve ser um .zip" })
+
+  const dir = subfolder
+    ? path.join(UPLOAD_DIR, folder, subfolder)
+    : path.join(UPLOAD_DIR, folder)
+  const zipPath = path.join(dir, path.basename(filename))
+
+  if (!fs.existsSync(zipPath))
+    return res.status(404).json({ error: "Arquivo zip não encontrado" })
+
+  let zip
+  try {
+    zip = new AdmZip(zipPath)
+  } catch (err) {
+    return res.status(400).json({ error: "Arquivo zip inválido ou corrompido" })
+  }
+
+  const entries = zip.getEntries()
+  const extracted = []
+  const errors = []
+
+  for (const entry of entries) {
+    if (entry.isDirectory) continue
+    if (entry.entryName.startsWith("__MACOSX/")) continue
+    if (entry.entryName.includes("/.")) continue
+
+    const data = entry.getData()
+    if (!data || data.length === 0) continue
+
+    const entryParts = entry.entryName.split("/")
+    const entryFilename = entryParts.pop()
+    const entrySubdir = entryParts.join("/")
+
+    // Destino: mesma pasta do zip + estrutura interna do zip
+    let targetDir = dir
+    if (entrySubdir) {
+      targetDir = path.join(dir, entrySubdir)
+      try { fs.mkdirSync(targetDir, { recursive: true }) } catch {}
+    }
+
+    const targetPath = path.join(targetDir, entryFilename)
+    try {
+      fs.writeFileSync(targetPath, data)
+      extracted.push(entry.entryName)
+    } catch (err) {
+      errors.push(entry.entryName)
+    }
+  }
+
+  console.log(`[extract-zip] OK: ${extracted.length} extraídos, ${errors.length} erros de ${zipPath}`)
+
+  res.json({
+    success: true,
+    extracted: extracted.length,
+    errors: errors.length,
+    files: extracted,
   })
 })
 
