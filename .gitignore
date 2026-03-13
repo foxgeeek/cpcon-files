@@ -16,3 +16,5 @@ uploads/**
 !uploads/simulados/.gitkeep
 !uploads/videos/
 !uploads/videos/.gitkeep
+!uploads/imagens/
+!uploads/imagens/.gitkeep
