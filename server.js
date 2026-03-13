@@ -94,6 +94,12 @@ const upload = multer({
   limits: { fileSize: 200 * 1024 * 1024 }, // 200MB pré-compressão (gs pode reduzir bastante)
 })
 
+// Upload sem limite — apenas para admin (extração de zip, backup, etc.)
+const uploadRaw = multer({
+  storage,
+  limits: { fileSize: Infinity },
+})
+
 // --- Compressão de imagem com sharp ---
 // Sempre comprime. Se ficar abaixo de IMAGE_MAX_BYTES numa das passagens, para cedo.
 // Caso contrário, usa a menor versão obtida e aceita assim mesmo.
@@ -250,6 +256,35 @@ app.post("/upload", auth, (req, res) => {
       console.error("[upload] error:", e.message)
       res.status(400).json({ error: e.message })
     }
+  })
+})
+
+// POST /upload-raw?folder=X — upload sem compressão e sem limite (admin/extract)
+app.post("/upload-raw", auth, (req, res) => {
+  uploadRaw.single("file")(req, res, async (err) => {
+    if (err) {
+      console.error("[upload-raw] multer error:", err.message)
+      return res.status(400).json({ error: err.message })
+    }
+    if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" })
+
+    const folder    = req.query.folder
+    const subfolder = safeSub(req.query.subfolder)
+    const finalSize = fs.statSync(req.file.path).size
+    const url       = subfolder
+      ? BASE_URL + "/files/" + folder + "/" + subfolder + "/" + req.file.filename
+      : BASE_URL + "/files/" + folder + "/" + req.file.filename
+
+    console.log("[upload-raw] OK:", folder + "/" + req.file.filename, "(" + (finalSize / 1024).toFixed(0) + "KB)")
+
+    res.json({
+      url,
+      folder,
+      filename:     req.file.filename,
+      originalname: req.file.originalname,
+      size:         finalSize,
+      mimetype:     req.file.mimetype,
+    })
   })
 })
 
