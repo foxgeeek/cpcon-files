@@ -96,8 +96,13 @@ const upload = multer({
 })
 
 // Upload sem limite — apenas para admin (extração de zip, backup, etc.)
-// Mantém o nome original do arquivo
-const storageRaw = multer.diskStorage({
+const uploadRaw = multer({
+  storage,
+  limits: { fileSize: Infinity },
+})
+
+// Upload para o gerenciador de arquivos — mantém o nome original sem alterar nada
+const storageManager = multer.diskStorage({
   destination: (req, file, cb) => {
     const folder    = req.query.folder || "uploads"
     const subfolder = safeSub(req.query.subfolder)
@@ -109,8 +114,8 @@ const storageRaw = multer.diskStorage({
     cb(null, file.originalname)
   },
 })
-const uploadRaw = multer({
-  storage: storageRaw,
+const uploadManager = multer({
+  storage: storageManager,
   limits: { fileSize: Infinity },
 })
 
@@ -290,6 +295,35 @@ app.post("/upload-raw", auth, (req, res) => {
       : BASE_URL + "/files/" + folder + "/" + req.file.filename
 
     console.log("[upload-raw] OK:", folder + "/" + req.file.filename, "(" + (finalSize / 1024).toFixed(0) + "KB)")
+
+    res.json({
+      url,
+      folder,
+      filename:     req.file.filename,
+      originalname: req.file.originalname,
+      size:         finalSize,
+      mimetype:     req.file.mimetype,
+    })
+  })
+})
+
+// POST /upload-manager?folder=X&subfolder=Y — upload para o gerenciador de arquivos (nome original intacto)
+app.post("/upload-manager", auth, (req, res) => {
+  uploadManager.single("file")(req, res, async (err) => {
+    if (err) {
+      console.error("[upload-manager] multer error:", err.message)
+      return res.status(400).json({ error: err.message })
+    }
+    if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" })
+
+    const folder    = req.query.folder
+    const subfolder = safeSub(req.query.subfolder)
+    const finalSize = fs.statSync(req.file.path).size
+    const url       = subfolder
+      ? BASE_URL + "/files/" + folder + "/" + subfolder + "/" + req.file.filename
+      : BASE_URL + "/files/" + folder + "/" + req.file.filename
+
+    console.log("[upload-manager] OK:", folder + "/" + req.file.filename, "(" + (finalSize / 1024).toFixed(0) + "KB)")
 
     res.json({
       url,
