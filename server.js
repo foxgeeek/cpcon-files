@@ -96,8 +96,21 @@ const upload = multer({
 })
 
 // Upload sem limite — apenas para admin (extração de zip, backup, etc.)
+// Mantém o nome original do arquivo
+const storageRaw = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const folder    = req.query.folder || "uploads"
+    const subfolder = safeSub(req.query.subfolder)
+    const dest      = subfolder ? path.join(FILES_DIR, folder, subfolder) : path.join(FILES_DIR, folder)
+    fs.mkdirSync(dest, { recursive: true })
+    cb(null, dest)
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname)
+  },
+})
 const uploadRaw = multer({
-  storage,
+  storage: storageRaw,
   limits: { fileSize: Infinity },
 })
 
