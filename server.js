@@ -92,7 +92,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB pré-compressão
+  limits: { fileSize: 5 * 1024 * 1024 * 1024 }, // 5GB
 })
 
 // Upload sem limite — apenas para admin (extração de zip, backup, etc.)
