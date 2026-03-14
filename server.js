@@ -104,9 +104,11 @@ const uploadRaw = multer({
 // Upload para o gerenciador de arquivos — mantém o nome original sem alterar nada
 const storageManager = multer.diskStorage({
   destination: (req, file, cb) => {
-    const folder    = req.query.folder || "uploads"
+    const folder = req.query.folder
+    if (!folder || !ALLOWED_FOLDERS.includes(folder))
+      return cb(new Error("Pasta inválida. Use: " + ALLOWED_FOLDERS.join(", ")))
     const subfolder = safeSub(req.query.subfolder)
-    const dest      = subfolder ? path.join(FILES_DIR, folder, subfolder) : path.join(FILES_DIR, folder)
+    const dest      = subfolder ? path.join(UPLOAD_DIR, folder, subfolder) : path.join(UPLOAD_DIR, folder)
     fs.mkdirSync(dest, { recursive: true })
     cb(null, dest)
   },
